@@ -1,0 +1,76 @@
+library('quantmod')
+library('lubridate')
+library('data.table')
+library('ggcorrplot')
+library('caTools')
+
+tickers <- c( 'XLK', 'XLV', 'XLF', 'XLRE', 'XLE', 'XLB', 'XLY',
+              'XLI', 'XLU', 'XLP', 'XLC')
+sectors <- c( 'Technology', 'Health Care', 'Financials', 'Real Estate', 'Energy', 'Materials', 'Cons Discr',
+              'Industrials', 'Utilities', 'Consumer Staples', 'Comm Svcs')
+
+portfolio3 <- NULL
+for( i in 1:length(tickers) ) {
+  # initialize portfolio of returns
+  portfolio1 <-  getSymbols( tickers[ i ],
+                             auto.assign = FALSE,
+                             from = '2016-01-01')
+  
+  # Grab close price
+  portfolio2 <- portfolio1[ , 4 ]
+  # Turn into daily log returns
+  portfolio3a <- dailyReturn( portfolio2, method = 'log' )
+  portfolio3 <- cbind( portfolio3, portfolio3a)
+}
+
+names( portfolio3 ) <- sectors
+portfolio <- portfolio3[complete.cases(portfolio3),]
+# portfolio3 as xts object hangs out here in case needed
+
+# build covariance/correlation time series.....
+portfolio <- as.data.table(portfolio)
+names(portfolio)[names(portfolio) == 'index'] <- 'date'
+
+# Notes:
+days <- portfolio$date
+days <- days[-(1:30)]
+
+covariances <- list()
+correlations <- list()
+for( day in days ) {
+  tempPort <- portfolio[(portfolio$date < day & portfolio$date > (day -44)), ]
+  tempPort$date <- NULL
+  tempCov <- list(cov(tempPort))
+  covariances <- append(covariances, tempCov)
+
+  tempCor <- list(cor(tempPort))
+  correlations <- append(correlations, tempCor)
+}
+
+# ToDo: at this point I have three lists: dates (days), covariance matrices (covariances)
+#        and correlation matrices (correlations)
+# Next step is to stow this into a .csv file in a way that can be retrieved later and added to
+# if desired....
+
+# Goal: create a movie of correlation matrices.  Rstudio IDE does not allow this.
+# Images must be created from the command line, or a file created using .jpg files.
+# ImageMagick is a suggested application for this.
+
+for( i in 1:length(days) ) {
+  title <- as.character(days[i])
+  matrix <- data.frame(correlations[i])
+  ggcorrplot(matrix, method = 'circle', title = title, type = 'upper')
+  #Sys.sleep(4)
+  #print(i)
+}
+
+# struggling here with how this particular loop would be used to create gif, etc.
+for( i in 1:length(days) ) {
+  title <- toString(days[i])
+  matrix <- data.frame(correlations[i])
+  # jpeg(paste('fig', i, '.jpg', sep = ''))
+  ggcorrplot(matrix, title = title, method = 'circle', type = 'upper')
+  #dev.off()
+  #Sys.sleep(4)
+  #print(i)
+}
